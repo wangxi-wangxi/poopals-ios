@@ -1,0 +1,42 @@
+name: iOS validation
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core record and calendar tests
+        run: |
+          mkdir -p build/module-cache
+          swiftc -module-cache-path build/module-cache Poopals/Record.swift Tests/CoreTests.swift -o build/core-tests
+          ./build/core-tests
+      - name: Compile iOS app
+        run: |
+          set -o pipefail
+          xcodebuild build -project Poopals.xcodeproj -scheme Poopals -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/xcodebuild.log
+      - name: Simulator launch smoke test
+        run: |
+          set -euo pipefail
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for k,v in d["devices"].items() if "iOS" in k for x in v if "iPhone" in x["name"]))')
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/DerivedData/Build/Products/Debug-iphonesimulator/Poopals.app
+          xcrun simctl launch "$DEVICE" com.example.poopals
+          sleep 5
+          xcrun simctl io "$DEVICE" screenshot build/launch.png
+          ditto -c -k --keepParent build/DerivedData/Build/Products/Debug-iphonesimulator/Poopals.app build/Poopals-simulator.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-validation
+          path: |
+            build/xcodebuild.log
+            build/launch.png
+            build/Poopals-simulator.zip
+          retention-days: 7
