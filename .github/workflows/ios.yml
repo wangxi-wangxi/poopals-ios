@@ -45,6 +45,10 @@ jobs:
           xcrun simctl launch "$DEVICE" com.example.poopals
           sleep 5
           xcrun simctl io "$DEVICE" screenshot build/launch.png
+          xcrun simctl terminate "$DEVICE" com.example.poopals
+          xcrun simctl launch "$DEVICE" com.example.poopals --show-account
+          sleep 5
+          xcrun simctl io "$DEVICE" screenshot build/account.png
           ditto -c -k --keepParent build/DerivedData/Build/Products/Debug-iphonesimulator/Poopals.app build/Poopals-simulator.zip
       - uses: actions/upload-artifact@v4
         if: always()
@@ -53,5 +57,6 @@ jobs:
           path: |
             build/xcodebuild.log
             build/launch.png
+            build/account.png
             build/Poopals-simulator.zip
           retention-days: 7

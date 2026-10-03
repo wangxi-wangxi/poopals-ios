@@ -26,6 +26,7 @@ struct AccountScreen: View {
                     Text(store.book.pendingChanges == true ? "本机有待同步的更改" : "记录已保存在当前设备")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("立即同步") { Task { await account.sync(store: store) } }
+                    Button("导入此设备的游客记录") { Task { await account.offerGuestImport(store: store) } }
                 }
                 if let target = account.importTarget {
                     Section("导入本机记录") {
@@ -47,7 +48,28 @@ struct AccountScreen: View {
                     }
                 }
                 Section("登录渠道") {
-                    Label(account.session?.provider == "apple" ? "Apple · 已连接" : "微信 · 已连接", systemImage: "checkmark.seal")
+                    ForEach(account.providers, id: \.self) { provider in
+                        Label(provider == "apple" ? "Apple · 已连接" : "微信 · 已连接", systemImage: "checkmark.seal")
+                    }
+                    if account.config?.apple == true && !account.providers.contains("apple") {
+                        SignInWithAppleButton(.continue) { request in request.nonce = account.nonceHash } onCompletion: { result in
+                            Task { await account.appleResult(result, store: store, linking: true) }
+                        }.signInWithAppleButtonStyle(.black).frame(height: 48).disabled(account.challenge == nil)
+                        Text("将 Apple 登录绑定到当前日历").font(.caption)
+                    }
+                    if account.config?.wechat == true && !account.providers.contains("wechat") && WeChatLogin.shared.available {
+                        Button("绑定微信到当前账号") {
+                            guard let challenge = account.challenge else { return }
+                            WeChatLogin.shared.login(state: challenge.nonce) { result in
+                                Task { @MainActor in
+                                    switch result {
+                                    case .success(let value): await account.linkProvider("wechat", body: LoginBody(challenge_id: challenge.id, code: value.0, identity_token: nil, state: value.1))
+                                    case .failure(let error): account.message = error.localizedDescription
+                                    }
+                                }
+                            }
+                        }.disabled(account.challenge == nil)
+                    }
                     Text("其他登录方式将逐步开放。不同账号的记录不会自动合并。")
                         .font(.caption).foregroundStyle(.secondary)
                     DisclosureGroup("重新验证身份") { loginSection }
@@ -67,6 +89,7 @@ struct AccountScreen: View {
         }
         .disabled(account.busy)
         .overlay { if account.busy { ProgressView().padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16)) } }
+        .scrollContentBackground(.hidden).background(Color(.systemBackground))
         .navigationTitle("账号与同步").navigationBarTitleDisplayMode(.inline)
         .task { await account.prepareLogin() }
         .alert("账号提示", isPresented: Binding(get: { account.message != nil }, set: { if !$0 { account.message = nil } })) {

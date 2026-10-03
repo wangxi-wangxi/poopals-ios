@@ -39,7 +39,8 @@ enum DayKey {
     static func date(_ key: String, calendar: Calendar = .current) -> Date? {
         let p = key.split(separator: "-").compactMap { Int($0) }
         guard p.count == 3 else { return nil }
-        return calendar.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 12))
+        guard let date = calendar.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 12)), make(date, calendar: calendar) == key else { return nil }
+        return date
     }
     static func monthDays(_ date: Date, calendar: Calendar = .current) -> [Date?] {
         guard let start = calendar.dateInterval(of: .month, for: date)?.start,

@@ -87,3 +87,34 @@ def test_unconfigured_login_not_fake_success(client,monkeypatch):
     monkeypatch.delenv('APPLE_CLIENT_ID',raising=False)
     challenge=client.post('/v1/auth/challenge').json()
     assert client.post('/v1/auth/login/apple',json={'challenge_id':challenge['id'],'code':'x'}).status_code == 503
+
+@pytest.mark.parametrize('aud,nonce,sub,expected',[
+    ('com.test.poopals','correct','user-1',True),
+    ('other-app','correct','user-1',False),
+    ('com.test.poopals','wrong','user-1',False),
+    ('com.test.poopals','correct','different-user',False),
+])
+def test_apple_signature_audience_nonce_and_code_binding(client,monkeypatch,aud,nonce,sub,expected):
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    private=rsa.generate_private_key(public_exponent=65537,key_size=2048)
+    claims={'iss':'https://appleid.apple.com','aud':aud,'sub':'user-1','iat':int(time.time()),'exp':int(time.time())+60,'nonce':api.digest(nonce)}
+    token=api.jwt.encode(claims,private,algorithm='RS256',headers={'kid':'test'})
+    exchange=api.jwt.encode({**claims,'aud':'com.test.poopals','sub':sub},private,algorithm='RS256',headers={'kid':'test'})
+    monkeypatch.setenv('APPLE_CLIENT_ID','com.test.poopals')
+    monkeypatch.setattr(api,'configured',lambda provider:True)
+    monkeypatch.setattr(api,'apple_secret',lambda:'test-client-secret')
+    monkeypatch.setattr(api.jwt,'PyJWKClient',lambda url:SimpleNamespace(get_signing_key_from_jwt=lambda value:SimpleNamespace(key=private.public_key())))
+    class FakeClient:
+        def __init__(self,**kwargs):pass
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def post(self,*args,**kwargs):return SimpleNamespace(raise_for_status=lambda:None,json=lambda:{'id_token':exchange,'refresh_token':'refresh'})
+    monkeypatch.setattr(api.httpx,'Client',FakeClient)
+    body=api.Login(challenge_id='test',code='one-time-code',identity_token=token)
+    if expected:
+        assert api.verify_provider('apple',body,'correct') == ('user-1','refresh')
+    else:
+        with pytest.raises(HTTPException) as error:api.verify_provider('apple',body,'correct')
+        assert error.value.status_code == 401

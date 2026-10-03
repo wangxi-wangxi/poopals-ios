@@ -55,19 +55,21 @@ final class CheckInStore: ObservableObject {
         var next = book; next.cloudRevision = revision; next.pendingChanges = true
         try repository.write(next); book = next
     }
+    func guestRecords() throws -> [CheckIn] { try RecordRepository(url: guestURL).load().records }
     func backupBeforeMerge() throws {
         let url = repository.url.deletingPathExtension().appendingPathExtension("recovery.json")
         try RecordRepository(url: url).write(book)
     }
     func leaveAccount(delete: Bool) throws {
         let guest = RecordRepository(url: guestURL)
-        let loaded = try guest.load()
+        let loaded = try? guest.load()
         if delete {
             for path in [repository.url, repository.url.deletingPathExtension().appendingPathExtension("recovery.json")] {
                 if FileManager.default.fileExists(atPath: path.path) { try FileManager.default.removeItem(at: path) }
             }
         }
-        repository = guest; ownerID = nil; book = loaded; writable = true
+        repository = guest; ownerID = nil; book = loaded ?? RecordBook(); writable = loaded != nil
+        if loaded == nil { errorMessage = RecordError.invalidFile.localizedDescription }
     }
 
 }

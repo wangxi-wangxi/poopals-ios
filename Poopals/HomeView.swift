@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var today = Date()
     @State private var calendarOpen = false
     @State private var settingsOpen = false
+    @State private var accountOpen = false
     @State private var celebrating = false
     @State private var confirmReplace = false
     private let midnightCheck = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -18,7 +19,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("每天记录一点，轻松一点").foregroundStyle(.secondary)
                     WeekCard(now: today) { calendarOpen = true }
-                    NavigationLink { AccountScreen() } label: {
+                    Button { accountOpen = true } label: {
                         Label(account.session == nil ? "记录已留在本机 · 开启云备份" : account.status, systemImage: account.session == nil ? "icloud" : "icloud.and.arrow.up")
                             .font(.caption)
                     }
@@ -90,6 +91,7 @@ struct HomeView: View {
                 }.padding(.horizontal, 24).padding(.vertical, 10).background(.regularMaterial)
             }
             .navigationDestination(isPresented: $calendarOpen) { CalendarScreen() }
+            .navigationDestination(isPresented: $accountOpen) { AccountScreen() }
             .sheet(isPresented: $settingsOpen) { SettingsScreen() }
             .fullScreenCover(isPresented: $celebrating, onDismiss: { calendarOpen = true }) {
                 SuccessScreen(kind: kind, streak: store.book.streak()) { celebrating = false }
@@ -98,7 +100,12 @@ struct HomeView: View {
                 Button("更新今日记录") { save() }
                 Button("取消", role: .cancel) { }
             }
-            .onAppear { refreshToday() }
+            .onAppear {
+                refreshToday()
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--show-account") { accountOpen = true }
+                #endif
+            }
             .onReceive(midnightCheck) { _ in today = Date() }
             .onChange(of: scenePhase) { _, phase in if phase == .active { refreshToday() } }
         }

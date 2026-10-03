@@ -102,9 +102,10 @@ final class AccountService: ObservableObject {
             catch { message = error.localizedDescription; return }
             status = "已登录 · 等待同步"
             await sync(store: store)
+            if let details: AccountDetails = try? await request("v1/account") { providers = details.providers }
         }
     }
-    func appleResult(_ result: Result<ASAuthorization, Error>, store: CheckInStore) async {
+    func appleResult(_ result: Result<ASAuthorization, Error>, store: CheckInStore, linking: Bool = false) async {
         guard !busy else { return }
         guard let challenge else { message = "请刷新登录方式后重试"; return }
         do {
@@ -112,11 +113,22 @@ final class AccountService: ObservableObject {
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }),
                   let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }) else { throw CloudError.message("Apple 未返回完整凭证") }
-            await login(provider: "apple", body: LoginBody(challenge_id: challenge.id, code: code, identity_token: token, state: nil), store: store)
+            let body = LoginBody(challenge_id: challenge.id, code: code, identity_token: token, state: nil)
+            if linking { await linkProvider("apple", body: body) }
+            else { await login(provider: "apple", body: body, store: store) }
         } catch {
             if (error as? ASAuthorizationError)?.code != .canceled { message = error.localizedDescription }
             await prepareLogin()
         }
+    }
+    func linkProvider(_ provider: String, body: LoginBody) async {
+        guard !busy else { return }; busy = true; defer { busy = false }
+        do {
+            let _: [String: Bool] = try await request("v1/account/link/\(provider)", method: "POST", body: JSONEncoder().encode(body))
+            let details: AccountDetails = try await request("v1/account")
+            providers = details.providers; message = "登录方式已绑定到当前账号"
+        } catch { message = error.localizedDescription }
+        challenge = nil
     }
     func login(provider: String, body: LoginBody, store: CheckInStore) async {
         busy = true; defer { busy = false }
@@ -133,9 +145,12 @@ final class AccountService: ObservableObject {
                 throw error
             }
             session = result; generation = UUID(); providers = [provider]
+            if let details: AccountDetails = try? await request("v1/account") { providers = details.providers }
             status = "已登录 · 等待同步"
+            guestImport = previousGuest
             let remote: CloudSnapshot = try await request("v1/checkins")
             if store.book.pendingChanges == true {
+                guestImport = []
                 // An existing account cache is never discarded during reauthentication.
                 conflict = remote
             } else if !previousGuest.isEmpty {
@@ -146,6 +161,13 @@ final class AccountService: ObservableObject {
             }
         } catch { message = error.localizedDescription }
         challenge = nil
+    }
+    func offerGuestImport(store: CheckInStore) async {
+        guard !busy, session != nil, store.book.pendingChanges != true else {
+            message = "请先同步当前账号的修改，再导入游客记录"; return
+        }
+        do { guestImport = try store.guestRecords(); await sync(store: store) }
+        catch { message = error.localizedDescription }
     }
     func finishImport(store: CheckInStore, preferGuest: Bool?, importing: Bool) async {
         guard let remote = importTarget else { return }
@@ -163,6 +185,11 @@ final class AccountService: ObservableObject {
         busy = true; defer { busy = false }
         let operation = generation
         do {
+            if !guestImport.isEmpty {
+                importTarget = try await request("v1/checkins")
+                status = "请选择是否导入本机记录"
+                return
+            }
             if store.book.pendingChanges == true {
                 guard let revision = store.book.cloudRevision else {
                     conflict = try await request("v1/checkins"); return
