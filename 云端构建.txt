@@ -1,0 +1,15 @@
+噗噗搭子 · Codemagic 首次构建
+
+1. 在自己的 GitHub 账号下新建 Private 仓库，建议名 poopals-ios。
+2. 把本文件同级的内容上传到仓库根目录。根目录必须直接能看到 codemagic.yaml 和 Poopals.xcodeproj，不能只上传 ZIP。
+3. 在 Codemagic 添加该仓库，使用 codemagic.yaml 配置。
+4. 手动启动 ios-simulator 工作流。
+5. 成功后下载 Poopals-simulator.zip；失败时下载 xcodebuild.log 排查。
+
+该工作流先运行记录/日历核心测试，再编译 iOS 模拟器应用。
+不需要 Apple 签名证书，不会自动发布。构建会消耗 Codemagic 额度。
+模拟器 .app 不能直接安装到 iPhone，也不是可提交商店的 IPA。
+当前尚未实际执行云端构建，完整 iOS 编译结果待验证。
+
+下一阶段：Apple Developer 会员生效后，设置正式 Bundle ID、Team、App 图标和 App Store Connect 应用；在 Codemagic 安全配置签名和 App Store Connect 集成，再添加 TestFlight 工作流。
+不要把密码、.p8 密钥或签名证书提交到仓库。
