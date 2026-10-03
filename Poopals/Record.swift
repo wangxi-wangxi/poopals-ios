@@ -57,6 +57,8 @@ enum DayKey {
 
 struct RecordBook: Codable {
     var version = 1
+    var cloudRevision: Int? = nil
+    var pendingChanges: Bool? = nil
     var records: [CheckIn] = []
     mutating func save(day: Date, kind: PooKind, size: PooSize, now: Date = Date(), calendar: Calendar = .current) throws {
         let key = DayKey.make(day, calendar: calendar)

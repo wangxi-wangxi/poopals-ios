@@ -8,3 +8,11 @@ xcuserdata/
 *.p8
 *.p12
 *.mobileprovision
+
+__pycache__/
+.pytest_cache/
+.venv/
+backend/data/
+*.sqlite3
+*.sqlite3-*
+!backend/.env.example

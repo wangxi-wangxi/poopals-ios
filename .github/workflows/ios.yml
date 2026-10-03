@@ -6,6 +6,19 @@ on:
 permissions:
   contents: read
 jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements-test.txt
+      - run: python -m pytest -q
+        working-directory: backend
+        env:
+          DATABASE_PATH: /tmp/poopals-tests.sqlite3
   simulator:
     runs-on: macos-26
     timeout-minutes: 20
@@ -16,6 +29,8 @@ jobs:
           mkdir -p build/module-cache
           swiftc -module-cache-path build/module-cache Poopals/Record.swift Tests/CoreTests.swift -o build/core-tests
           ./build/core-tests
+          swiftc -module-cache-path build/module-cache Poopals/Record.swift Poopals/CloudModels.swift Tests/CloudModelTests.swift -o build/cloud-tests
+          ./build/cloud-tests
       - name: Compile iOS app
         run: |
           set -o pipefail

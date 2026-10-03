@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsScreen: View {
     @EnvironmentObject var reminders: ReminderService
     @EnvironmentObject var store: CheckInStore
+    @EnvironmentObject var account: AccountService
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var exportURL: URL?
@@ -10,6 +11,12 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("账号与同步") {
+                    NavigationLink { AccountScreen() } label: {
+                        Label(account.session == nil ? "开启云备份" : "账号与同步", systemImage: "person.crop.circle")
+                    }
+                    Text(account.status).font(.caption).foregroundStyle(.secondary)
+                }
                 Section {
                     Toggle("每日提醒", isOn: Binding(get: { reminders.enabled }, set: { value in
                         Task { await reminders.apply(enabled: value, time: reminders.time) }
@@ -22,7 +29,7 @@ struct SettingsScreen: View {
                     Text("每天在这个时间提醒你打开日历。即使当天已经记录，也会收到提醒。")
                 }.disabled(reminders.busy)
                 Section("数据与隐私") {
-                    Text("记录保存在这台 iPhone 的应用空间内，不上传服务器。系统设备备份可能包含这些记录；删除 App 会删除本地数据。")
+                    Text("游客记录仅保存在本机；主动登录并确认导入后，可同步到配置的云服务。系统设备备份可能包含本地记录。删除 App 不等于注销云端账号。")
                         .font(.subheadline)
                     if let exportURL {
                         ShareLink(item: exportURL) { Label("分享记录备份", systemImage: "square.and.arrow.up") }
@@ -36,7 +43,7 @@ struct SettingsScreen: View {
                     Button("打开系统通知设置") {
                         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                     }
-                    Text("噗噗搭子 · 0.1.0 开发版").foregroundStyle(.secondary)
+                    Text("噗噗搭子 · 0.2.0 开发版").foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("提醒与设置").navigationBarTitleDisplayMode(.inline)

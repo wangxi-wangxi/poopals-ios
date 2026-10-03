@@ -6,7 +6,11 @@ final class CheckInStore: ObservableObject {
     @Published private(set) var book = RecordBook()
     @Published var errorMessage: String?
     @Published private(set) var writable = true
-    let repository: RecordRepository
+    private(set) var repository: RecordRepository
+    private(set) var ownerID: String?
+    private var guestURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Poopals/records.json")
+    }
     init() {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         repository = RecordRepository(url: directory.appendingPathComponent("Poopals/records.json"))
@@ -19,6 +23,7 @@ final class CheckInStore: ObservableObject {
         do {
             var next = book
             try next.save(day: day, kind: kind, size: size)
+            next.pendingChanges = ownerID != nil
             try repository.write(next)
             book = next
             return true
@@ -29,10 +34,42 @@ final class CheckInStore: ObservableObject {
         do {
             var next = book
             next.delete(day: day)
+            next.pendingChanges = ownerID != nil
             try repository.write(next)
             book = next
         } catch { errorMessage = "删除失败：\(error.localizedDescription)" }
     }
+    func activate(userID: String) throws {
+        guard UUID(uuidString: userID) != nil else { throw RecordError.invalidFile }
+        let next = RecordRepository(url: guestURL.deletingLastPathComponent().appendingPathComponent("account-\(userID).json"))
+        let loaded = try next.load()
+        repository = next; ownerID = userID; book = loaded; writable = true
+    }
+    func acceptCloud(_ snapshot: CloudSnapshot, dirty: Bool = false) throws {
+        var next = RecordBook()
+        next.records = snapshot.records.sorted { $0.day > $1.day }
+        next.cloudRevision = snapshot.revision; next.pendingChanges = dirty
+        try repository.write(next); book = next
+    }
+    func updateRevision(_ revision: Int) throws {
+        var next = book; next.cloudRevision = revision; next.pendingChanges = true
+        try repository.write(next); book = next
+    }
+    func backupBeforeMerge() throws {
+        let url = repository.url.deletingPathExtension().appendingPathExtension("recovery.json")
+        try RecordRepository(url: url).write(book)
+    }
+    func leaveAccount(delete: Bool) throws {
+        let guest = RecordRepository(url: guestURL)
+        let loaded = try guest.load()
+        if delete {
+            for path in [repository.url, repository.url.deletingPathExtension().appendingPathExtension("recovery.json")] {
+                if FileManager.default.fileExists(atPath: path.path) { try FileManager.default.removeItem(at: path) }
+            }
+        }
+        repository = guest; ownerID = nil; book = loaded; writable = true
+    }
+
 }
 
 @MainActor

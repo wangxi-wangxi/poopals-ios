@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CalendarScreen: View {
     @EnvironmentObject var store: CheckInStore
+    @EnvironmentObject var account: AccountService
     @State private var month = Date()
     @State private var selected = Date()
     @State private var editing: CheckIn?
@@ -66,7 +67,7 @@ struct CalendarScreen: View {
         .toolbar { Button("今天") { month = Date(); selected = Date() } }
         .sheet(item: $editing) { record in EditRecordScreen(record: record) }
         .confirmationDialog("删除这一天的记录？删除后无法撤销。", isPresented: $deleteConfirmation, titleVisibility: .visible) {
-            Button("删除记录", role: .destructive) { if let r = selectedRecord { store.delete(day: r.day) } }
+            Button("删除记录", role: .destructive) { if let r = selectedRecord { store.delete(day: r.day); Task { await account.sync(store: store) } } }
         }
     }
     private func shift(_ amount: Int) {
@@ -95,6 +96,7 @@ struct CalendarScreen: View {
 
 struct EditRecordScreen: View {
     @EnvironmentObject var store: CheckInStore
+    @EnvironmentObject var account: AccountService
     @Environment(\.dismiss) private var dismiss
     let record: CheckIn
     @State private var kind: PooKind
@@ -118,7 +120,7 @@ struct EditRecordScreen: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        if let date = DayKey.date(record.day), store.save(day: date, kind: kind, size: size) { dismiss() }
+                        if let date = DayKey.date(record.day), store.save(day: date, kind: kind, size: size) { Task { await account.sync(store: store) }; dismiss() }
                     }.disabled(!store.writable)
                 }
             }

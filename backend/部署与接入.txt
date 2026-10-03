@@ -1,0 +1,64 @@
+噗噗搭子 0.2 · 后端接入包
+
+当前状态
+API 和客户端已实现，但尚未部署公网服务。Apple / 微信真实授权未验收。
+默认客户端 PoopalsAPIURL 为空，因此云服务入口明确显示尚未开放，不会模拟登录。
+
+本地运行
+Python 3.12，创建虚拟环境后：
+pip install -r requirements.txt
+uvicorn app:app --host 127.0.0.1 --port 8000
+测试：pip install -r requirements-test.txt && python -m pytest -q
+接口说明：本地服务 /docs（生产应限制文档访问）
+
+部署
+Dockerfile 提供单实例容器。持久挂载 /data，禁止把数据库目录暴露为静态文件。
+该版本使用 SQLite，适合验证和小规模单实例；多实例扩容前改为 PostgreSQL。
+上线必须使用 HTTPS 反向代理，限制请求体为 2MB，对登录挑战和登录接口做 IP 频率限制。
+配置加密存储卷和定期加密备份；明确备份保留/删除周期，演练恢复。
+.env.example 只列出变量名。生产通过云平台 Secret 注入，不提交真实密钥。
+TOKEN_ENCRYPTION_KEY 用 cryptography.fernet.Fernet.generate_key() 生成，妥善备份；用于加密 Apple refresh_token。
+API 不记录请求体或凭证，容器默认关闭访问日志。
+API 的数据库存储内部 user_id、登录渠道唯一标识、加密 Apple 撤销凭证、会话 token 哈希、日历记录。
+不保存 Apple/微信密码，也不请求昵称、邮箱、头像或通讯录。
+
+Apple
+1. 开通 Apple Developer，在正式 Bundle ID 开启 Sign in with Apple。
+2. 服务端配置 APPLE_CLIENT_ID（必须与实际 App Bundle ID 一致）、TEAM_ID、KEY_ID 和私钥。
+3. 签名构建设置 CODE_SIGN_ENTITLEMENTS=Poopals/Poopals.entitlements，配置包含登录能力的 profile。
+4. 客户端配置 POOPALS_API_URL=https://你的服务域名。
+5. 真机验证一次性 challenge、nonce、授权取消、首次/再次登录、注销撤销凭证。
+6. 生产补齐 Apple 账号变更通知和撤销授权后的会话清理，完成安全复核后开放云登录。
+
+微信
+1. 审核通过的微信开放平台移动应用，AppID/AppSecret 与正式 Bundle ID 对应。
+2. 服务端设置 WECHAT_APP_ID / WECHAT_APP_SECRET；AppSecret 仅在服务端。
+3. 从微信官方渠道集成 WechatOpenSDK XCFramework，模块名 WechatOpenSDK。
+4. 配置 Info.plist WeChatAppID、WeChatUniversalLink、微信 URL Scheme、LSApplicationQueriesSchemes；签名 entitlements 配置 Associated Domains，并在域名托管 AASA。
+5. WeChatLogin.swift 已提供官方 SDK 的条件编译适配、state 校验、URL/Universal Link 回调与超时处理。默认工程未引入 SDK，相关分支尚未编译验证，按钮保持隐藏。
+6. SDK 集成后需单独完成真机安装微信/未安装、取消授权、拒绝授权、过期 code 的端到端测试。
+
+API
+POST /v1/auth/challenge → 一次性随机 nonce（5分钟）
+POST /v1/auth/login/apple 或 wechat → 验证渠道凭证，返回内部账号和30天会话
+GET /v1/account → 当前账号、已绑定渠道
+POST /v1/account/link/apple 或 wechat → 当前账号重新验证后显式绑定；已属其他账号则409
+GET /v1/checkins → 当前账号 snapshot 与 revision
+PUT /v1/checkins → expected revision 匹配才替换整份日历；不匹配返回409
+POST /v1/auth/logout → 撤销当前会话
+DELETE /v1/account → 最近10分钟重新登录后撤销 Apple 授权并删除账号关联数据
+
+同步协议
+day 是固定 YYYY-MM-DD 日历日期，旅行不会平移旧日期。
+createdAt / updatedAt 沿用 Swift Date Codable 的2001年参考秒数，不能当成 Unix 时间使用。
+初次导入：按日期合并，重复日期由用户明确决定保留本机还是云端。
+多设备冲突：保留两份，用户明确选择整份本机/云端；不自动复活被删除记录。
+退出账号：游客文件与 account-UUID 文件隔离。待同步内容保留在原账号缓存。
+当前不支持恢复 JSON 导入，导出仅作为备份。
+
+双人功能
+此包只包含设计稿及数据契约，未实现关系服务或 APNs。
+后续表：buddy_invites（哈希token、过期时间、一次性接受）、buddy_pairs（双向同意、唯一有效关系）、sharing_preferences、push_devices、notification_outbox。
+默认共享已打卡日期，不共享角色/大小。通知只写“搭子今天已打卡”。
+打卡事务写入通知队列，异步 APNs 投递并去重；失败不能回滚个人记录。
+好友提醒需对方允许、每日限一次；解除关系或注销立即撤销共享和提醒权限。

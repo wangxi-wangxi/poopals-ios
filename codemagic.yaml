@@ -12,6 +12,8 @@ workflows:
           mkdir -p build/module-cache
           swiftc -module-cache-path build/module-cache Poopals/Record.swift Tests/CoreTests.swift -o build/core-tests
           ./build/core-tests
+          swiftc -module-cache-path build/module-cache Poopals/Record.swift Poopals/CloudModels.swift Tests/CloudModelTests.swift -o build/cloud-tests
+          ./build/cloud-tests
       - name: Build unsigned iOS simulator app
         script: |
           set -euo pipefail

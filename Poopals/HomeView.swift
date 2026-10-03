@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var store: CheckInStore
+    @EnvironmentObject var account: AccountService
     @Environment(\.scenePhase) private var scenePhase
     @State private var kind: PooKind = .yellow
     @State private var size: PooSize = .m
@@ -17,6 +18,10 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("每天记录一点，轻松一点").foregroundStyle(.secondary)
                     WeekCard(now: today) { calendarOpen = true }
+                    NavigationLink { AccountScreen() } label: {
+                        Label(account.session == nil ? "记录已留在本机 · 开启云备份" : account.status, systemImage: account.session == nil ? "icloud" : "icloud.and.arrow.up")
+                            .font(.caption)
+                    }
                     VStack(spacing: 14) {
                         HStack { Text("今天的大小").font(.headline); Spacer() }
                         Picker("今天的大小", selection: $size) {
@@ -106,7 +111,10 @@ struct HomeView: View {
         if let record = store.book.record(on: today) { kind = record.kind; size = record.size }
     }
     private func save() {
-        if store.save(day: today, kind: kind, size: size) { celebrating = true }
+        if store.save(day: today, kind: kind, size: size) {
+            celebrating = true
+            Task { await account.sync(store: store) }
+        }
     }
 }
 
