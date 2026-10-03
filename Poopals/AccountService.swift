@@ -181,7 +181,7 @@ final class AccountService: ObservableObject {
         } catch { message = error.localizedDescription }
     }
     func sync(store: CheckInStore) async {
-        guard session != nil, !busy, importTarget == nil, conflict == nil, store.writable else { return }
+        guard let session, store.ownerID == session.user_id, !busy, importTarget == nil, conflict == nil, store.writable else { return }
         busy = true; defer { busy = false }
         let operation = generation
         do {
@@ -229,7 +229,7 @@ final class AccountService: ObservableObject {
         guard !busy else { return }; busy = true; defer { busy = false }
         do {
             let _: [String: Bool] = try await request(delete ? "v1/account" : "v1/auth/logout", method: delete ? "DELETE" : "POST")
-            try store.leaveAccount(delete: delete)
+            try store.leaveAccount(delete: delete && store.ownerID != nil && store.ownerID == session?.user_id)
             generation = UUID(); session = nil; SessionKeychain.clear()
             conflict = nil; importTarget = nil; guestImport = []; providers = []; status = "仅保存在本机"
         } catch { message = error.localizedDescription }

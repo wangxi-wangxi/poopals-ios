@@ -31,6 +31,8 @@ jobs:
           ./build/core-tests
           swiftc -module-cache-path build/module-cache Poopals/Record.swift Poopals/CloudModels.swift Tests/CloudModelTests.swift -o build/cloud-tests
           ./build/cloud-tests
+          swiftc -target "$(uname -m)-apple-macosx14.0" -module-cache-path build/module-cache Poopals/Record.swift Poopals/CloudModels.swift Poopals/AppStore.swift Tests/AccountStoreTests.swift -o build/account-tests
+          ./build/account-tests
       - name: Compile iOS app
         run: |
           set -o pipefail

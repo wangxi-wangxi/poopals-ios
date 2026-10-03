@@ -8,12 +8,11 @@ final class CheckInStore: ObservableObject {
     @Published private(set) var writable = true
     private(set) var repository: RecordRepository
     private(set) var ownerID: String?
-    private var guestURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Poopals/records.json")
-    }
-    init() {
-        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        repository = RecordRepository(url: directory.appendingPathComponent("Poopals/records.json"))
+    private let guestURL: URL
+    init(directory: URL? = nil) {
+        let directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Poopals")
+        guestURL = directory.appendingPathComponent("records.json")
+        repository = RecordRepository(url: guestURL)
         do { book = try repository.load() }
         catch { writable = false; errorMessage = RecordError.invalidFile.localizedDescription }
     }
@@ -46,12 +45,14 @@ final class CheckInStore: ObservableObject {
         repository = next; ownerID = userID; book = loaded; writable = true
     }
     func acceptCloud(_ snapshot: CloudSnapshot, dirty: Bool = false) throws {
+        guard ownerID != nil else { throw RecordError.invalidFile }
         var next = RecordBook()
         next.records = snapshot.records.sorted { $0.day > $1.day }
         next.cloudRevision = snapshot.revision; next.pendingChanges = dirty
         try repository.write(next); book = next
     }
     func updateRevision(_ revision: Int) throws {
+        guard ownerID != nil else { throw RecordError.invalidFile }
         var next = book; next.cloudRevision = revision; next.pendingChanges = true
         try repository.write(next); book = next
     }
