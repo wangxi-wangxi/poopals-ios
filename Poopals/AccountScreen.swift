@@ -11,7 +11,13 @@ struct AccountScreen: View {
         Form {
             if account.session == nil {
                 Section {
-                    HStack { Spacer(); Image("AccountSticker").resizable().scaledToFit().frame(width: 140, height: 120); Spacer() }
+                    Color.clear.frame(height: 150)
+                        .overlay {
+                            Image("AccountSticker").resizable().scaledToFit()
+                                .frame(width: 140, height: 140)
+                                .accessibilityHidden(true)
+                        }
+                        .listRowSeparator(.hidden)
                     Text("让日历跟着你").font(.title2.bold())
                     Text("先记录，随时再登录。开启云备份后，可以在新设备找回日历。")
                     Text("游客记录不会自动上传。登录后由你决定是否导入。")
