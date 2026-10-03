@@ -102,8 +102,13 @@ struct HomeView: View {
             }
             .onAppear {
                 refreshToday()
+            }
+            .task {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--show-account") { accountOpen = true }
+                if ProcessInfo.processInfo.arguments.contains("--show-account") {
+                    try? await Task.sleep(for: .seconds(1))
+                    accountOpen = true
+                }
                 #endif
             }
             .onReceive(midnightCheck) { _ in today = Date() }

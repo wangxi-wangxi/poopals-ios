@@ -45,11 +45,11 @@ jobs:
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl install "$DEVICE" build/DerivedData/Build/Products/Debug-iphonesimulator/Poopals.app
           xcrun simctl launch "$DEVICE" com.example.poopals
-          sleep 5
+          sleep 20
           xcrun simctl io "$DEVICE" screenshot build/launch.png
           xcrun simctl terminate "$DEVICE" com.example.poopals
           xcrun simctl launch "$DEVICE" com.example.poopals --show-account
-          sleep 5
+          sleep 20
           xcrun simctl io "$DEVICE" screenshot build/account.png
           ditto -c -k --keepParent build/DerivedData/Build/Products/Debug-iphonesimulator/Poopals.app build/Poopals-simulator.zip
       - uses: actions/upload-artifact@v4
