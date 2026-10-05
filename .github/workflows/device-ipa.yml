@@ -1,0 +1,49 @@
+name: iPhone IPA for Sideloadly
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/device-ipa.yml'
+permissions:
+  contents: read
+jobs:
+  device-ipa:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile unsigned iPhone release
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild build -project Poopals.xcodeproj -scheme Poopals -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/DeviceDerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' CODE_SIGN_ENTITLEMENTS='' 2>&1 | tee build/device-build.log
+      - name: Validate device binary and package IPA
+        run: |
+          set -euo pipefail
+          APP=build/DeviceDerivedData/Build/Products/Release-iphoneos/Poopals.app
+          test -f "$APP/Poopals"
+          xcrun lipo -verify_arch arm64 "$APP/Poopals"
+          xcrun vtool -show-build "$APP/Poopals" | tee build/device-platform.txt
+          grep -Eq 'platform +IOS$' build/device-platform.txt
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$APP/Info.plist" | grep -qx iPhoneOS
+          mkdir -p build/package/Payload
+          ditto "$APP" build/package/Payload/Poopals.app
+          cd build/package
+          COPYFILE_DISABLE=1 zip -qry ../Poopals-0.2-iPhone-Sideloadly.ipa Payload
+          cd ../..
+          unzip -t build/Poopals-0.2-iPhone-Sideloadly.ipa
+          shasum -a 256 build/Poopals-0.2-iPhone-Sideloadly.ipa > build/IPA-SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Poopals-iPhone-Sideloadly
+          path: |
+            build/Poopals-0.2-iPhone-Sideloadly.ipa
+            build/IPA-SHA256.txt
+            build/device-platform.txt
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: device-build-log
+          path: build/device-build.log
