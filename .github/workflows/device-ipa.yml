@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           APP=build/DeviceDerivedData/Build/Products/Release-iphoneos/Poopals.app
           test -f "$APP/Poopals"
-          xcrun lipo -verify_arch arm64 "$APP/Poopals"
+          xcrun lipo "$APP/Poopals" -verify_arch arm64
           xcrun vtool -show-build "$APP/Poopals" | tee build/device-platform.txt
           grep -Eq 'platform +IOS$' build/device-platform.txt
           /usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$APP/Info.plist" | grep -qx iPhoneOS
